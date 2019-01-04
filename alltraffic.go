@@ -11,9 +11,9 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
-	// "spinifex/base"
-	"spinifex/netfilter/config"
-	"spinifex/netfilter/model"
+	// "github.com/irai/base"
+	"github.com/irai/netfilter/netfilter/config"
+	"github.com/irai/netfilter/netfilter/model"
 	"sync"
 	"time"
 )

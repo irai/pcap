@@ -9,7 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"spinifex/netfilter/model"
+	"github.com/irai/netfilter/netfilter/model"
 	"strings"
 	"time"
 )
