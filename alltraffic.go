@@ -12,8 +12,8 @@ import (
 	"github.com/google/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
 	// "github.com/irai/base"
-	"github.com/irai/netfilter/netfilter/config"
-	"github.com/irai/netfilter/netfilter/model"
+	"github.com/irai/netfilter/config"
+	"github.com/irai/netfilter/model"
 	"sync"
 	"time"
 )

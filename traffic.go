@@ -9,7 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"github.com/irai/netfilter/netfilter/model"
+	"github.com/irai/netfilter/model"
 	"strings"
 	"time"
 )
