@@ -83,7 +83,7 @@ func PrintTable() {
 	}
 
 	log.Printf("Traffic Table len %d", len(table))
-	log.Println("MAC                 IP         outconn  inpkt     inbytes outpkt   outbytes")
+	log.Println("MAC                 IP              outconn  inpkt     inbytes outpkt   outbytes")
 
 	for _, host := range table {
 		for _, t := range host.Traffic {
@@ -172,12 +172,11 @@ func captureTcpTraffic(packet gopacket.Packet) {
 		// return
 		// }
 
+		tcpLen := uint(ip.Length - uint16(ip.IHL*4))
+
 		host := findOrAddMAC(eth.SrcMAC)
 		entry := host.findOrAddIP(ip.SrcIP)
 
-		tcpLen := uint(ip.Length - uint16(ip.IHL*4))
-
-		// entry.IP = ip.SrcIP.String()
 		entry.LastPacketTime = now
 		entry.OutPacketBytes = entry.OutPacketBytes + tcpLen
 		entry.OutPacketCount = entry.OutPacketCount + 1
@@ -185,9 +184,14 @@ func captureTcpTraffic(packet gopacket.Packet) {
 			entry.OutConnCount = entry.OutConnCount + 1
 		}
 
-		host = findOrAddMAC(eth.DstMAC)
 		entry = host.findOrAddIP(ip.DstIP)
-		entry.LastPacketTime = now
+		entry.InPacketBytes = entry.InPacketBytes + tcpLen
+		entry.InPacketCount = entry.InPacketCount + 1
+
+		// Record in destination
+		//
+		host = findOrAddMAC(eth.DstMAC)
+		entry = host.findOrAddIP(ip.SrcIP)
 		entry.InPacketBytes = entry.InPacketBytes + tcpLen
 		entry.InPacketCount = entry.InPacketCount + 1
 	}
