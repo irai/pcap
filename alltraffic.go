@@ -119,7 +119,7 @@ func TrafficProxyLoop(gwHostName string, deviceId string) {
 }
 ***/
 
-func ListenAndServe(nic string) {
+func ListenAndServe(nic string, hostMAC net.HardwareAddr) {
 	const snapshot_len int32 = 1024
 	const promiscuous bool = true
 	const timeout time.Duration = 10 * time.Second
@@ -145,11 +145,11 @@ func ListenAndServe(nic string) {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
 		// PrintPacketInfo(packet)
-		captureTcpTraffic(packet)
+		captureTcpTraffic(hostMAC, packet)
 	}
 }
 
-func captureTcpTraffic(packet gopacket.Packet) {
+func captureTcpTraffic(hostMAC net.HardwareAddr, packet gopacket.Packet) {
 	ethLayer := packet.Layer(layers.LayerTypeEthernet)
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
@@ -177,16 +177,19 @@ func captureTcpTraffic(packet gopacket.Packet) {
 		host := findOrAddMAC(eth.SrcMAC)
 		entry := host.findOrAddIP(ip.SrcIP)
 
-		entry.LastPacketTime = now
-		entry.OutPacketBytes = entry.OutPacketBytes + tcpLen
-		entry.OutPacketCount = entry.OutPacketCount + 1
-		if tcp.SYN {
-			entry.OutConnCount = entry.OutConnCount + 1
-		}
+		// Skip forwarding packets
+		if eth.SrcMAC.String() != hostMAC.String() {
+			entry.LastPacketTime = now
+			entry.OutPacketBytes = entry.OutPacketBytes + tcpLen
+			entry.OutPacketCount = entry.OutPacketCount + 1
+			if tcp.SYN {
+				entry.OutConnCount = entry.OutConnCount + 1
+			}
 
-		entry = host.findOrAddIP(ip.DstIP)
-		entry.InPacketBytes = entry.InPacketBytes + tcpLen
-		entry.InPacketCount = entry.InPacketCount + 1
+			entry = host.findOrAddIP(ip.DstIP)
+			entry.InPacketBytes = entry.InPacketBytes + tcpLen
+			entry.InPacketCount = entry.InPacketCount + 1
+		}
 
 		// Record in destination
 		//
