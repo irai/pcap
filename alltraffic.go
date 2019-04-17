@@ -127,7 +127,7 @@ func ListenAndServe(nic string, hostMAC net.HardwareAddr) {
 
 	handle, err := pcap.OpenLive(nic, snapshot_len, promiscuous, timeout)
 	if err != nil {
-		log.Fatal("Cannoc pcap nic", nix, err)
+		log.Fatal("Cannot pcap nic", nic, err)
 	}
 	defer handle.Close()
 
