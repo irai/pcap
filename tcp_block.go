@@ -1,12 +1,13 @@
 package filters
 
 import (
+	"net"
+	"time"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
-	"net"
-	"time"
 )
 
 type IPEndPoint struct {
@@ -33,7 +34,7 @@ func BlockTCPTraffic(ifName string, localInterface *net.IPNet) {
 
 	handle, err := pcap.OpenLive(ifName, snapshot_len, promiscuous, timeout)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("cannot pcap interface", ifName, err)
 	}
 	defer handle.Close()
 
@@ -44,7 +45,7 @@ func BlockTCPTraffic(ifName string, localInterface *net.IPNet) {
 	var filter string = "tcp and port 22"
 	err = handle.SetBPFFilter(filter)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("set bpfilter tct and port 22", err)
 	}
 
 	// Use the handle as a packet source to process all packets
@@ -165,7 +166,7 @@ func SendTCPReset(handle *pcap.Handle, packet gopacket.Packet, reply bool,
 		outgoingPacket := buffer.Bytes()
 		err := handle.WritePacketData(outgoingPacket)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("error in writepacketdata", err)
 		}
 		tcpLayer.Seq = tcpLayer.Seq + uint32(tcpLayer.Window)
 	}

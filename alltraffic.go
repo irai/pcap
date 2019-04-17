@@ -127,7 +127,7 @@ func ListenAndServe(nic string, hostMAC net.HardwareAddr) {
 
 	handle, err := pcap.OpenLive(nic, snapshot_len, promiscuous, timeout)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Cannoc pcap nic", nix, err)
 	}
 	defer handle.Close()
 
@@ -138,7 +138,7 @@ func ListenAndServe(nic string, hostMAC net.HardwareAddr) {
 	var filter string = "tcp"
 	err = handle.SetBPFFilter(filter)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("cannot bpfilter", err)
 	}
 
 	// Use the handle as a packet source to process all packets
