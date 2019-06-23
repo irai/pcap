@@ -1,17 +1,18 @@
-package filters
+package pcap
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
-	"github.com/irai/netfilter/model"
 	"strings"
 	"time"
+
+	"github.com/irai/netfilter/model"
+	log "github.com/sirupsen/logrus"
 )
 
 var (

@@ -1,10 +1,11 @@
-package filters
+package pcap
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"strings"
 )
 
 func PrintPacketInfo(packet gopacket.Packet) {

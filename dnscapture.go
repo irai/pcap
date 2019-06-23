@@ -1,10 +1,11 @@
-package filters
+package pcap
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"strconv"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"

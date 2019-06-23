@@ -1,4 +1,4 @@
-package filters
+package pcap
 
 import (
 	"net"
@@ -19,12 +19,12 @@ type IPEndPoint struct {
 var interfaceNetwork *net.IPNet
 
 //
-// BlockTCPTraffic will loop waiting for TCP packets to intercept.
+// BlockTCPStats will loop waiting for TCP packets to intercept.
 // Call it from a goroutine.
 //
 // It will then send a TCP RST packet to close the socket.
 //
-func BlockTCPTraffic(ifName string, localInterface *net.IPNet) {
+func BlockTCPStats(ifName string, localInterface *net.IPNet) {
 	interfaceNetwork = localInterface
 
 	const snapshot_len int32 = 1024
@@ -52,11 +52,11 @@ func BlockTCPTraffic(ifName string, localInterface *net.IPNet) {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
 		log.Info("blocked packet")
-		killTcpTraffic(handle, packet)
+		killTCPStats(handle, packet)
 	}
 }
 
-func killTcpTraffic(handle *pcap.Handle, packet gopacket.Packet) {
+func killTCPStats(handle *pcap.Handle, packet gopacket.Packet) {
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 
