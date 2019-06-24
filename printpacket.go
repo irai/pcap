@@ -8,6 +8,7 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
+// PrintPacketInfo print a network packet to stdout
 func PrintPacketInfo(packet gopacket.Packet) {
 	// Let's see if the packet is an ethernet packet
 	ethernetLayer := packet.Layer(layers.LayerTypeEthernet)

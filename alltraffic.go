@@ -51,14 +51,15 @@ func (h *HostStats) findOrAddIP(ip net.IP) (entry *TCPStats) {
 }
 
 var (
-	table map[string]*HostStats = map[string]*HostStats{}
+	table = map[string]*HostStats{}
 	mutex sync.Mutex
 )
 
+// FindMAC find a host in the table; return nil if not found
 func FindMAC(mac net.HardwareAddr) *HostStats {
 	defer mutex.Unlock()
-
 	mutex.Lock()
+
 	return table[mac.String()]
 }
 
@@ -74,7 +75,7 @@ func findOrAddMAC(mac net.HardwareAddr) (entry *HostStats) {
 	return entry
 }
 
-// PrintTable prints the table to standard out
+// PrintTable print the table to standard out
 // TODO: Should use http://info.io to lookup names and geo
 func PrintTable() {
 	if len(table) <= 0 {
@@ -86,21 +87,23 @@ func PrintTable() {
 
 	for _, host := range table {
 		for _, t := range host.Traffic {
-			log.Printf("%16s %15s %7d %6d %10d %6d %10d", host.MAC.String(), t.IP,
+			log.Printf("%16s %15s %7d %6d %10d %6d %10d", host.MAC, DNSLookupByIP(t.IP),
 				t.OutConnCount, t.InPacketCount, t.InPacketBytes, t.OutPacketCount, t.OutPacketBytes)
 		}
 	}
 }
 
-func ListenAndServe(nic string, hostMAC net.HardwareAddr) err {
-	const snapshot_len int32 = 1024
+// ListenAndServe main listening loop
+func ListenAndServe(nic string, hostMAC net.HardwareAddr) error {
+	const snapshotLen int32 = 1024
 	const promiscuous bool = true
 	const timeout time.Duration = 10 * time.Second
 	// handle  *pcap.Handle
 
-	handle, err := pcap.OpenLive(nic, snapshot_len, promiscuous, timeout)
+	handle, err := pcap.OpenLive(nic, snapshotLen, promiscuous, timeout)
 	if err != nil {
-		log.Fatal("Cannot pcap nic", nic, err)
+		log.Error("Cannot pcap nic", nic, err)
+		return err
 	}
 	defer handle.Close()
 
@@ -121,6 +124,7 @@ func ListenAndServe(nic string, hostMAC net.HardwareAddr) err {
 		// PrintPacketInfo(packet)
 		captureTCPStats(hostMAC, packet)
 	}
+	return nil
 }
 
 func captureTCPStats(hostMAC net.HardwareAddr, packet gopacket.Packet) {

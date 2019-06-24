@@ -27,12 +27,12 @@ var interfaceNetwork *net.IPNet
 func BlockTCPStats(ifName string, localInterface *net.IPNet) {
 	interfaceNetwork = localInterface
 
-	const snapshot_len int32 = 1024
+	const snapshotLen int32 = 1024
 	const promiscuous bool = true
 	const timeout time.Duration = 1
 	// handle  *pcap.Handle
 
-	handle, err := pcap.OpenLive(ifName, snapshot_len, promiscuous, timeout)
+	handle, err := pcap.OpenLive(ifName, snapshotLen, promiscuous, timeout)
 	if err != nil {
 		log.Fatal("cannot pcap interface", ifName, err)
 	}
@@ -42,7 +42,7 @@ func BlockTCPStats(ifName string, localInterface *net.IPNet) {
 	// Set filter
 	// var filter string = "tcp and (port 80 or port 443)"
 	// var filter string = "tcp"
-	var filter string = "tcp and port 22"
+	filter := "tcp and port 22"
 	err = handle.SetBPFFilter(filter)
 	if err != nil {
 		log.Fatal("set bpfilter tct and port 22", err)

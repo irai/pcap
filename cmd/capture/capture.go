@@ -9,66 +9,40 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/irai/arp"
+	"github.com/irai/pcap"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	ifaceFlag = flag.String("i", "eth0", "network interface to listen to")
-	defaultGw = flag.String("g", "", "default gateway IPv4 (-g 192.168.1.1)")
-
-/***
-CIDRFlag = flag.String("cidr", "", "CIDR destination to probe with ARP request")
-
-dstIPFlag = flag.String("dip", "", "dst IP for reply packet i.e -sip 192.168.0.10. ARP poisoning")
-
-dstMACFlag = flag.String("dmac", "", "dst MAC for reply packet i.e -mac 6e:a7:e6:d6:f9:a4 . ARP poisoning")
-**/
+	nic = flag.String("i", "eth0", "network interface to listen to")
 )
 
 func main() {
 	flag.Parse()
 
-	SetLogLevel("info")
+	setLogLevel("info")
 
-	NIC := *ifaceFlag
-
-	var err error
-	HostIP, HostMAC, err := NICGetInformation(NIC)
+	_, hostMAC, err := nicGetInfo(*nic)
 	if err != nil {
 		log.Fatal("error cannot get host ip and mac ", err)
 	}
 
-	HomeLAN := net.IPNet{IP: net.IPv4(HostIP[0], HostIP[1], HostIP[2], 0), Mask: net.CIDRMask(25, 32)}
-	HomeRouterIP := net.ParseIP(*defaultGw)
-	if HomeRouterIP == nil {
-		HomeRouterIP, err = getLinuxDefaultGateway()
-	}
-	if err != nil {
-		log.Fatal("cannot get default gateway ", err)
-	}
-	log.Info("Router IP: ", HomeRouterIP, "Home LAN: ", HomeLAN)
+	go pcap.ListenAndServe(*nic, hostMAC)
+	go pcap.DNSListen(*nic)
 
-	go c.ListenAndServe(time.Second * 30 * 5)
-
-	c.Stop()
-
-	cmd(c)
-
-	c.Stop()
+	cmd()
 
 }
 
-func cmd(c *arp.Handler) {
+func cmd() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Println("Command: (q)uit | (l)ist | (f)force <mac> | (s) stop <mac> | (g) loG <level>")
+		fmt.Println("Command: (q)uit | (l)ist | (g) loG <level>")
 		fmt.Print("Enter command: ")
 		text, _ := reader.ReadString('\n')
 		text = strings.ToLower(text[:len(text)-1])
-		fmt.Println(text)
+		// fmt.Println(text)
 
 		if text == "" || len(text) < 1 {
 			continue
@@ -81,50 +55,21 @@ func cmd(c *arp.Handler) {
 			if len(text) < 3 {
 				text = text + "   "
 			}
-			err := SetLogLevel(text[2:])
+			err := setLogLevel(text[2:])
 			if err != nil {
 				log.Error("invalid level. valid levels (error, warn, info, debug) ", err)
 				break
 			}
 		case 'l':
-			l := log.GetLevel()
-			SetLogLevel("info") // quick hack to print table
-			c.PrintTable()
-			log.SetLevel(l)
-		case 'f':
-			entry := getMAC(c, text)
-			if entry != nil {
-				c.ForceIPChange(entry.MAC, entry.IP)
-			}
-		case 's':
-			entry := getMAC(c, text)
-			if entry != nil {
-				c.StopIPChange(entry.MAC)
-			}
+			// l := log.GetLevel()
+			// setLogLevel("info") // quick hack to print table
+			pcap.PrintTable()
+			// log.SetLevel(l)
 		}
 	}
 }
 
-func getMAC(c *arp.Handler, text string) *arp.Entry {
-	if len(text) <= 3 {
-		log.Error("Invalid MAC")
-		return nil
-	}
-	mac, err := net.ParseMAC(text[2:])
-	if err != nil {
-		log.Error("invalid MAC ", err)
-		return nil
-	}
-	entry := c.FindMAC(mac)
-	if entry == nil {
-		log.Error("Mac not found: ", mac)
-		return nil
-	}
-	return entry
-}
-
-func NICGetInformation(nic string) (ip net.IP, mac net.HardwareAddr, err error) {
-
+func nicGetInfo(nic string) (ip net.IP, mac net.HardwareAddr, err error) {
 	all, err := net.Interfaces()
 	for _, v := range all {
 		log.Debug("interface name ", v.Name, v.HardwareAddr.String())
@@ -165,7 +110,7 @@ func NICGetInformation(nic string) (ip net.IP, mac net.HardwareAddr, err error) 
 	return ip, mac, err
 }
 
-func SetLogLevel(level string) (err error) {
+func setLogLevel(level string) (err error) {
 
 	if level != "" {
 		l, err := log.ParseLevel(level)
