@@ -10,22 +10,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type IPEndPoint struct {
-	Protocol string
-	IP       string
-	Port     uint16
-}
-
-var interfaceNetwork *net.IPNet
-
 //
 // BlockTCPStats will loop waiting for TCP packets to intercept.
 // Call it from a goroutine.
 //
 // It will then send a TCP RST packet to close the socket.
 //
-func BlockTCPStats(ifName string, localInterface *net.IPNet) {
-	interfaceNetwork = localInterface
+func BlockTCPStats(ifName string, network *net.IPNet) {
 
 	const snapshotLen int32 = 1024
 	const promiscuous bool = true
@@ -52,11 +43,11 @@ func BlockTCPStats(ifName string, localInterface *net.IPNet) {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
 		log.Info("blocked packet")
-		killTCPStats(handle, packet)
+		killTCPStats(network, handle, packet)
 	}
 }
 
-func killTCPStats(handle *pcap.Handle, packet gopacket.Packet) {
+func killTCPStats(network *ip.IPNet, handle *pcap.Handle, packet gopacket.Packet) {
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 
@@ -64,7 +55,7 @@ func killTCPStats(handle *pcap.Handle, packet gopacket.Packet) {
 	tcp, _ := tcpLayer.(*layers.TCP)
 
 	// Clients are always on the LAN
-	if interfaceNetwork.Contains(ip.SrcIP) {
+	if network.Contains(ip.SrcIP) {
 		// match the sender sequence as per RFC, when connection is already closed
 
 		// FIXME: RST local connection is not working yet
@@ -73,17 +64,17 @@ func killTCPStats(handle *pcap.Handle, packet gopacket.Packet) {
 
 		// RST remote connection
 		PrintPacketInfo(packet)
-		SendTCPReset(handle, packet, false, ip, tcp)
-		// mytcp.SendTCPReset(handle, packet, true, ip, tcp)
-	} else if interfaceNetwork.Contains(ip.DstIP) {
+		sendTCPReset(handle, packet, false, ip, tcp)
+		// mytcp.sendTCPReset(handle, packet, true, ip, tcp)
+	} else if network.Contains(ip.DstIP) {
 		// Seq must match Ack field
 		// FIXME: this is not working yet for localtraffic
 		// mytcp.PrintPacketInfo(packet)
-		// mytcp.SendTCPReset(handle, packet, false, ip, tcp)
+		// mytcp.sendTCPReset(handle, packet, false, ip, tcp)
 	}
 }
 
-func SendTCPReset(handle *pcap.Handle, packet gopacket.Packet, reply bool,
+func sendTCPReset(handle *pcap.Handle, packet gopacket.Packet, reply bool,
 	ip *layers.IPv4, tcp *layers.TCP) {
 
 	var buffer gopacket.SerializeBuffer
