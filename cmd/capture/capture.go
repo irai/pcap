@@ -29,7 +29,7 @@ func main() {
 	}
 
 	go pcap.ListenAndServe(*nic, hostMAC)
-	go pcap.DNSListen(*nic)
+	// go pcap.DNSListen(*nic)
 
 	cmd()
 

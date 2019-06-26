@@ -47,7 +47,7 @@ func BlockTCPStats(ifName string, network *net.IPNet) {
 	}
 }
 
-func killTCPStats(network *ip.IPNet, handle *pcap.Handle, packet gopacket.Packet) {
+func killTCPStats(network *net.IPNet, handle *pcap.Handle, packet gopacket.Packet) {
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 

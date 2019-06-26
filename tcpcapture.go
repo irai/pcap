@@ -112,68 +112,68 @@ func ListenAndServe(nic string, hostMAC net.HardwareAddr) error {
 	// var filter string = "tcp and (port 80 or port 443)"
 	// var filter string = "tcp and port 80"
 	filter := "tcp"
-	err = handle.SetBPFFilter(filter)
-	if err != nil {
+	if err = handle.SetBPFFilter(filter); err != nil {
 		log.Error("cannot bpfilter", err)
 		return err
 	}
+	go captureTCPLoop(handle, hostMAC)
 
-	// Use the handle as a packet source to process all packets
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	for packet := range packetSource.Packets() {
-		// PrintPacketInfo(packet)
-		captureTCPStats(hostMAC, packet)
-	}
+	dnsListenAndServe(nic)
+
 	return nil
 }
 
-func captureTCPStats(hostMAC net.HardwareAddr, packet gopacket.Packet) {
-	ethLayer := packet.Layer(layers.LayerTypeEthernet)
-	ipLayer := packet.Layer(layers.LayerTypeIPv4)
-	tcpLayer := packet.Layer(layers.LayerTypeTCP)
+func captureTCPLoop(handle *pcap.Handle, hostMAC net.HardwareAddr) {
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	for packet := range packetSource.Packets() {
+		// PrintPacketInfo(packet)
+		ethLayer := packet.Layer(layers.LayerTypeEthernet)
+		ipLayer := packet.Layer(layers.LayerTypeIPv4)
+		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 
-	if ethLayer == nil || ipLayer == nil || tcpLayer == nil {
-		log.Error("Invalid packet ", ethLayer, ipLayer, tcpLayer)
-		return
-	}
+		if ethLayer == nil || ipLayer == nil || tcpLayer == nil {
+			log.Error("Invalid packet ", ethLayer, ipLayer, tcpLayer)
+			return
+		}
 
-	if tcpLayer != nil {
+		if tcpLayer != nil {
 
-		eth, _ := ethLayer.(*layers.Ethernet)
-		ip, _ := ipLayer.(*layers.IPv4)
-		tcp, _ := tcpLayer.(*layers.TCP)
+			eth, _ := ethLayer.(*layers.Ethernet)
+			ip, _ := ipLayer.(*layers.IPv4)
+			tcp, _ := tcpLayer.(*layers.TCP)
 
-		now := time.Now()
+			now := time.Now()
 
-		// Don't capture netfilter traffic
-		// if ip.SrcIP.Equal(config.HostIP) || ip.DstIP.Equal(config.HostIP) {
-		// return
-		// }
+			// Don't capture netfilter traffic
+			// if ip.SrcIP.Equal(config.HostIP) || ip.DstIP.Equal(config.HostIP) {
+			// return
+			// }
 
-		tcpLen := uint(ip.Length - uint16(ip.IHL*4))
+			tcpLen := uint(ip.Length - uint16(ip.IHL*4))
 
-		host := findOrAddMAC(eth.SrcMAC)
-		entry := host.findOrAddIP(ip.SrcIP)
+			host := findOrAddMAC(eth.SrcMAC)
+			entry := host.findOrAddIP(ip.SrcIP)
 
-		// Skip forwarding packets
-		if eth.SrcMAC.String() != hostMAC.String() {
-			entry.LastPacketTime = now
-			entry.OutPacketBytes = entry.OutPacketBytes + tcpLen
-			entry.OutPacketCount = entry.OutPacketCount + 1
-			if tcp.SYN {
-				entry.OutConnCount = entry.OutConnCount + 1
+			// Skip forwarding packets
+			if eth.SrcMAC.String() != hostMAC.String() {
+				entry.LastPacketTime = now
+				entry.OutPacketBytes = entry.OutPacketBytes + tcpLen
+				entry.OutPacketCount = entry.OutPacketCount + 1
+				if tcp.SYN {
+					entry.OutConnCount = entry.OutConnCount + 1
+				}
+
+				entry = host.findOrAddIP(ip.DstIP)
+				entry.InPacketBytes = entry.InPacketBytes + tcpLen
+				entry.InPacketCount = entry.InPacketCount + 1
 			}
 
-			entry = host.findOrAddIP(ip.DstIP)
+			// Record in destination
+			//
+			host = findOrAddMAC(eth.DstMAC)
+			entry = host.findOrAddIP(ip.SrcIP)
 			entry.InPacketBytes = entry.InPacketBytes + tcpLen
 			entry.InPacketCount = entry.InPacketCount + 1
 		}
-
-		// Record in destination
-		//
-		host = findOrAddMAC(eth.DstMAC)
-		entry = host.findOrAddIP(ip.SrcIP)
-		entry.InPacketBytes = entry.InPacketBytes + tcpLen
-		entry.InPacketCount = entry.InPacketCount + 1
 	}
 }
