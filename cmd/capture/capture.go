@@ -62,7 +62,7 @@ func cmd() {
 			}
 		case 'l':
 			// l := log.GetLevel()
-			// setLogLevel("info") // quick hack to print table
+			// setLogLevel("info") // quick hack to print hostStatsTable
 			pcap.PrintTable()
 			// log.SetLevel(l)
 		}

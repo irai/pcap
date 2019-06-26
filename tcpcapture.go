@@ -18,6 +18,11 @@ import (
 	"time"
 )
 
+var (
+	hostStatsTable = map[string]*HostStats{}
+	mutex          sync.Mutex
+)
+
 // TCPStats record TCP statistics for the IP address
 type TCPStats struct {
 	IP             net.IP    `json:"ip"`
@@ -50,42 +55,37 @@ func (h *HostStats) findOrAddIP(ip net.IP) (entry *TCPStats) {
 	return entry
 }
 
-var (
-	table = map[string]*HostStats{}
-	mutex sync.Mutex
-)
-
-// FindMAC find a host in the table; return nil if not found
+// FindMAC find a host in the hostStatsTable; return nil if not found
 func FindMAC(mac net.HardwareAddr) *HostStats {
 	defer mutex.Unlock()
 	mutex.Lock()
 
-	return table[mac.String()]
+	return hostStatsTable[mac.String()]
 }
 
 func findOrAddMAC(mac net.HardwareAddr) (entry *HostStats) {
 	defer mutex.Unlock()
 
 	mutex.Lock()
-	entry, ok := table[mac.String()]
+	entry, ok := hostStatsTable[mac.String()]
 	if !ok {
 		entry = &HostStats{MAC: dupMAC(mac), Traffic: []*TCPStats{}}
-		table[mac.String()] = entry
+		hostStatsTable[mac.String()] = entry
 	}
 	return entry
 }
 
-// PrintTable print the table to standard out
+// PrintTable print the hostStatsTable to standard out
 // TODO: Should use http://info.io to lookup names and geo
 func PrintTable() {
-	if len(table) <= 0 {
+	if len(hostStatsTable) <= 0 {
 		return
 	}
 
-	log.Printf("Traffic Table len %d", len(table))
+	log.Printf("Traffic hostStatsTable len %d", len(hostStatsTable))
 	log.Println("MAC                 IP              outconn  inpkt     inbytes outpkt   outbytes")
 
-	for _, host := range table {
+	for _, host := range hostStatsTable {
 		for _, t := range host.Traffic {
 			log.Printf("%16s %15s %7d %6d %10d %6d %10d", host.MAC, DNSLookupByIP(t.IP),
 				t.OutConnCount, t.InPacketCount, t.InPacketBytes, t.OutPacketCount, t.OutPacketBytes)
