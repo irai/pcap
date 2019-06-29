@@ -7,6 +7,7 @@
 package pcap
 
 import (
+	"bytes"
 	"net"
 
 	"github.com/google/gopacket"
@@ -36,9 +37,10 @@ type TCPStats struct {
 
 // HostStats record recent network statistics for each host
 type HostStats struct {
-	MAC     net.HardwareAddr `json:"mac"`
-	Blocked bool             `json:"client_blocked" `
-	Traffic []*TCPStats
+	MAC            net.HardwareAddr `json:"mac"`
+	Blocked        bool             `json:"client_blocked" `
+	LastPacketTime time.Time        `json:"last_packet_time"`
+	Traffic        []*TCPStats
 }
 
 func (h *HostStats) findOrAddIP(ip net.IP) (entry *TCPStats) {
@@ -63,13 +65,23 @@ func FindMAC(mac net.HardwareAddr) *HostStats {
 	return hostStatsTable[mac.String()]
 }
 
+// HasTrafficSince return true if the host has sent packets since the deadline
+func HasTrafficSince(mac net.HardwareAddr, deadline time.Time) bool {
+	if host := FindMAC(mac); host != nil {
+		if host.LastPacketTime.After(deadline) {
+			return true
+		}
+	}
+	return false
+}
+
 func findOrAddMAC(mac net.HardwareAddr) (entry *HostStats) {
 	defer mutex.Unlock()
 
 	mutex.Lock()
 	entry, ok := hostStatsTable[mac.String()]
 	if !ok {
-		entry = &HostStats{MAC: dupMAC(mac), Traffic: []*TCPStats{}}
+		entry = &HostStats{MAC: dupMAC(mac), LastPacketTime: time.Now(), Traffic: []*TCPStats{}}
 		hostStatsTable[mac.String()] = entry
 	}
 	return entry
@@ -83,11 +95,12 @@ func PrintTable() {
 	}
 
 	log.Printf("Traffic hostStatsTable len %d", len(hostStatsTable))
-	log.Println("MAC                 IP              outconn  inpkt     inbytes outpkt   outbytes")
+	log.Println("MAC                 IP              lastPacket outconn  inpkt     inbytes outpkt   outbytes")
 
+	now := time.Now()
 	for _, host := range hostStatsTable {
 		for _, t := range host.Traffic {
-			log.Printf("%16s %15s %7d %6d %10d %6d %10d", host.MAC, DNSLookupByIP(t.IP),
+			log.Printf("%16s %15s %6s %7d %6d %10d %6d %10d", host.MAC, DNSLookupByIP(t.IP), now.Sub(host.LastPacketTime),
 				t.OutConnCount, t.InPacketCount, t.InPacketBytes, t.OutPacketCount, t.OutPacketBytes)
 		}
 	}
@@ -151,11 +164,11 @@ func captureTCPLoop(handle *pcap.Handle, hostMAC net.HardwareAddr) {
 
 			tcpLen := uint(ip.Length - uint16(ip.IHL*4))
 
-			host := findOrAddMAC(eth.SrcMAC)
-			entry := host.findOrAddIP(ip.SrcIP)
-
-			// Skip forwarding packets
-			if eth.SrcMAC.String() != hostMAC.String() {
+			// Skip forwarding packets sent by us
+			if bytes.Compare(eth.SrcMAC, hostMAC) != 0 {
+				host := findOrAddMAC(eth.SrcMAC)
+				host.LastPacketTime = now
+				entry := host.findOrAddIP(ip.DstIP)
 				entry.LastPacketTime = now
 				entry.OutPacketBytes = entry.OutPacketBytes + tcpLen
 				entry.OutPacketCount = entry.OutPacketCount + 1
@@ -163,17 +176,19 @@ func captureTCPLoop(handle *pcap.Handle, hostMAC net.HardwareAddr) {
 					entry.OutConnCount = entry.OutConnCount + 1
 				}
 
-				entry = host.findOrAddIP(ip.DstIP)
-				entry.InPacketBytes = entry.InPacketBytes + tcpLen
-				entry.InPacketCount = entry.InPacketCount + 1
+				// entry = host.findOrAddIP(ip.DstIP)
+				// entry.InPacketBytes = entry.InPacketBytes + tcpLen
+				// entry.InPacketCount = entry.InPacketCount + 1
 			}
 
 			// Record in destination
-			//
-			host = findOrAddMAC(eth.DstMAC)
-			entry = host.findOrAddIP(ip.SrcIP)
-			entry.InPacketBytes = entry.InPacketBytes + tcpLen
-			entry.InPacketCount = entry.InPacketCount + 1
+			// Skip forwarding packets sent to us
+			if bytes.Compare(eth.DstMAC, hostMAC) != 0 {
+				host := findOrAddMAC(eth.DstMAC)
+				entry := host.findOrAddIP(ip.DstIP)
+				entry.InPacketBytes = entry.InPacketBytes + tcpLen
+				entry.InPacketCount = entry.InPacketCount + 1
+			}
 		}
 	}
 }
