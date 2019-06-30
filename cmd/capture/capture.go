@@ -23,12 +23,14 @@ func main() {
 
 	setLogLevel("info")
 
-	_, hostMAC, err := nicGetInfo(*nic)
+	_, localNetwork, hostMAC, err := nicGetInfo(*nic)
 	if err != nil {
 		log.Fatal("error cannot get host ip and mac ", err)
 	}
 
-	go pcap.ListenAndServe(*nic, hostMAC)
+	fmt.Println("host config: ", localNetwork, hostMAC)
+
+	go pcap.ListenAndServe(*nic, localNetwork, hostMAC)
 	// go pcap.DNSListen(*nic)
 
 	cmd()
@@ -69,7 +71,7 @@ func cmd() {
 	}
 }
 
-func nicGetInfo(nic string) (ip net.IP, mac net.HardwareAddr, err error) {
+func nicGetInfo(nic string) (ip net.IP, localNetwork *net.IPNet, mac net.HardwareAddr, err error) {
 	all, err := net.Interfaces()
 	for _, v := range all {
 		log.Debug("interface name ", v.Name, v.HardwareAddr.String())
@@ -77,7 +79,7 @@ func nicGetInfo(nic string) (ip net.IP, mac net.HardwareAddr, err error) {
 	ifi, err := net.InterfaceByName(nic)
 	if err != nil {
 		log.WithFields(log.Fields{"nic": nic}).Errorf("NIC cannot open nic %s error %s ", nic, err)
-		return ip, mac, err
+		return ip, localNetwork, mac, err
 	}
 
 	mac = ifi.HardwareAddr
@@ -85,16 +87,16 @@ func nicGetInfo(nic string) (ip net.IP, mac net.HardwareAddr, err error) {
 	addrs, err := ifi.Addrs()
 	if err != nil {
 		log.WithFields(log.Fields{"nic": nic}).Errorf("NIC cannot get addresses nic %s error %s ", nic, err)
-		return ip, mac, err
+		return ip, localNetwork, mac, err
 	}
 
 	for i := range addrs {
-		tmp, _, err := net.ParseCIDR(addrs[i].String())
+		ip, localNetwork, err = net.ParseCIDR(addrs[i].String())
 		if err != nil {
 			log.WithFields(log.Fields{"nic": nic}).Errorf("NIC cannot parse IP %s error %s ", addrs[i].String(), err)
 		}
-		log.Info("IP=", tmp)
-		ip = tmp.To4()
+		log.Info("IP=", ip)
+		ip = ip.To4()
 		if ip != nil && !ip.Equal(net.IPv4zero) {
 			break
 		}
@@ -103,11 +105,11 @@ func nicGetInfo(nic string) (ip net.IP, mac net.HardwareAddr, err error) {
 	if ip == nil || ip.Equal(net.IPv4zero) {
 		err = fmt.Errorf("NIC cannot find IPv4 address list - is %s up?", nic)
 		log.Error(err)
-		return ip, mac, err
+		return ip, localNetwork, mac, err
 	}
 
 	log.WithFields(log.Fields{"nic": nic, "ip": ip, "mac": mac}).Info("NIC successfull acquired host nic information")
-	return ip, mac, err
+	return ip, localNetwork, mac, err
 }
 
 func setLogLevel(level string) (err error) {

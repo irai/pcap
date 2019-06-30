@@ -38,6 +38,7 @@ type TCPStats struct {
 // HostStats record recent network statistics for each host
 type HostStats struct {
 	MAC            net.HardwareAddr `json:"mac"`
+	IP             net.IP           `json:"ip"`
 	Blocked        bool             `json:"client_blocked" `
 	LastPacketTime time.Time        `json:"last_packet_time"`
 	Traffic        []*TCPStats
@@ -57,17 +58,9 @@ func (h *HostStats) findOrAddIP(ip net.IP) (entry *TCPStats) {
 	return entry
 }
 
-// FindMAC find a host in the hostStatsTable; return nil if not found
-func FindMAC(mac net.HardwareAddr) *HostStats {
-	defer mutex.Unlock()
-	mutex.Lock()
-
-	return hostStatsTable[mac.String()]
-}
-
 // HasTrafficSince return true if the host has sent packets since the deadline
-func HasTrafficSince(mac net.HardwareAddr, deadline time.Time) bool {
-	if host := FindMAC(mac); host != nil {
+func HasTrafficSince(ip net.IP, deadline time.Time) bool {
+	if host := FindHostByIP(ip); host != nil {
 		if host.LastPacketTime.After(deadline) {
 			return true
 		}
@@ -75,16 +68,24 @@ func HasTrafficSince(mac net.HardwareAddr, deadline time.Time) bool {
 	return false
 }
 
-func findOrAddMAC(mac net.HardwareAddr) (entry *HostStats) {
+func findOrAddHostIP(ip net.IP, mac net.HardwareAddr) (entry *HostStats) {
 	defer mutex.Unlock()
-
 	mutex.Lock()
-	entry, ok := hostStatsTable[mac.String()]
+
+	entry, ok := hostStatsTable[ip.String()]
 	if !ok {
-		entry = &HostStats{MAC: dupMAC(mac), LastPacketTime: time.Now(), Traffic: []*TCPStats{}}
-		hostStatsTable[mac.String()] = entry
+		entry = &HostStats{MAC: dupMAC(mac), IP: dupIP(ip), LastPacketTime: time.Now(), Traffic: []*TCPStats{}}
+		hostStatsTable[ip.String()] = entry
 	}
 	return entry
+}
+
+// FindHostByIP find a host in the hostStatsTable; return nil if not found
+func FindHostByIP(ip net.IP) *HostStats {
+	defer mutex.Unlock()
+	mutex.Lock()
+
+	return hostStatsTable[ip.String()]
 }
 
 // PrintTable print the hostStatsTable to standard out
@@ -107,7 +108,7 @@ func PrintTable() {
 }
 
 // ListenAndServe main listening loop
-func ListenAndServe(nic string, hostMAC net.HardwareAddr) error {
+func ListenAndServe(nic string, localNetwork *net.IPNet, hostMAC net.HardwareAddr) error {
 	const snapshotLen int32 = 1024
 	const promiscuous bool = true
 	const timeout time.Duration = 10 * time.Second
@@ -129,14 +130,14 @@ func ListenAndServe(nic string, hostMAC net.HardwareAddr) error {
 		log.Error("cannot bpfilter", err)
 		return err
 	}
-	go captureTCPLoop(handle, hostMAC)
+	go captureTCPLoop(handle, localNetwork, hostMAC)
 
 	dnsListenAndServe(nic)
 
 	return nil
 }
 
-func captureTCPLoop(handle *pcap.Handle, hostMAC net.HardwareAddr) {
+func captureTCPLoop(handle *pcap.Handle, localNetwork *net.IPNet, hostMAC net.HardwareAddr) {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
 		// PrintPacketInfo(packet)
@@ -164,9 +165,15 @@ func captureTCPLoop(handle *pcap.Handle, hostMAC net.HardwareAddr) {
 
 			tcpLen := uint(ip.Length - uint16(ip.IHL*4))
 
-			// Skip forwarding packets sent by us
-			if bytes.Compare(eth.SrcMAC, hostMAC) != 0 {
-				host := findOrAddMAC(eth.SrcMAC)
+			// Skip forwarding sent by us
+			if bytes.Compare(eth.SrcMAC, hostMAC) == 0 {
+				continue
+			}
+
+			log.Info("host", ip.SrcIP)
+			// add to table if this is a local host sending data
+			if localNetwork.Contains(ip.SrcIP) {
+				host := findOrAddHostIP(ip.SrcIP, eth.SrcMAC)
 				host.LastPacketTime = now
 				entry := host.findOrAddIP(ip.DstIP)
 				entry.LastPacketTime = now
@@ -175,19 +182,15 @@ func captureTCPLoop(handle *pcap.Handle, hostMAC net.HardwareAddr) {
 				if tcp.SYN {
 					entry.OutConnCount = entry.OutConnCount + 1
 				}
-
-				// entry = host.findOrAddIP(ip.DstIP)
-				// entry.InPacketBytes = entry.InPacketBytes + tcpLen
-				// entry.InPacketCount = entry.InPacketCount + 1
 			}
 
-			// Record in destination
-			// Skip forwarding packets sent to us
-			if bytes.Compare(eth.DstMAC, hostMAC) != 0 {
-				host := findOrAddMAC(eth.DstMAC)
-				entry := host.findOrAddIP(ip.DstIP)
-				entry.InPacketBytes = entry.InPacketBytes + tcpLen
-				entry.InPacketCount = entry.InPacketCount + 1
+			// Record in destination host; if it exist
+			if localNetwork.Contains(ip.DstIP) {
+				if host := FindHostByIP(ip.DstIP); host != nil {
+					entry := host.findOrAddIP(ip.SrcIP)
+					entry.InPacketBytes = entry.InPacketBytes + tcpLen
+					entry.InPacketCount = entry.InPacketCount + 1
+				}
 			}
 		}
 	}
