@@ -108,7 +108,7 @@ func captureDNSLoop(handle *pcap.Handle) {
 						for _, dnsAnswer := range dns.Answers {
 							d.DNSAnswerTTL = append(d.DNSAnswerTTL, fmt.Sprint(dnsAnswer.TTL))
 							if dnsAnswer.IP != nil {
-								log.WithFields(log.Fields{"DNSAnswer": dnsAnswer.IP.String(), "question": d.DNSQuery}).Info("DNS new entry")
+								log.WithFields(log.Fields{"DNSAnswer": dnsAnswer.IP.String(), "question": d.DNSQuery}).Debug("DNS new entry")
 								d.DNSAnswer = append(d.DNSAnswer, dnsAnswer.IP)
 							}
 						}
