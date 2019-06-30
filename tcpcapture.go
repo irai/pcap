@@ -101,7 +101,7 @@ func PrintTable() {
 	now := time.Now()
 	for _, host := range hostStatsTable {
 		for _, t := range host.Traffic {
-			log.Printf("%16s %15s %6s %7d %6d %10d %6d %10d", host.MAC, DNSLookupByIP(t.IP), now.Sub(host.LastPacketTime),
+			log.Printf("%16s %15s %6s %7d %6d %10d %6d %10d", host.IP, DNSLookupByIP(t.IP), now.Sub(host.LastPacketTime),
 				t.OutConnCount, t.InPacketCount, t.InPacketBytes, t.OutPacketCount, t.OutPacketBytes)
 		}
 	}
@@ -170,7 +170,6 @@ func captureTCPLoop(handle *pcap.Handle, localNetwork *net.IPNet, hostMAC net.Ha
 				continue
 			}
 
-			log.Info("host", ip.SrcIP)
 			// add to table if this is a local host sending data
 			if localNetwork.Contains(ip.SrcIP) {
 				host := findOrAddHostIP(ip.SrcIP, eth.SrcMAC)
