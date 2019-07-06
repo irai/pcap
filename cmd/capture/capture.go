@@ -31,7 +31,8 @@ func main() {
 	fmt.Println("host config: ", localNetwork, hostMAC)
 
 	go pcap.ListenAndServe(*nic, localNetwork, hostMAC)
-	// go pcap.DNSListen(*nic)
+
+	go pcap.ICMPListenAndServe(*nic)
 
 	cmd()
 
