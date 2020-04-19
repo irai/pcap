@@ -33,7 +33,7 @@ type DNSStats struct {
 func dnsListenAndServe(ifName string) {
 	const snapshotLen int32 = 1600
 	const promiscuous bool = true
-	const timeout time.Duration = 5 * time.Second
+	const timeout time.Duration = 0
 
 	// Open device
 	handle, err := pcap.OpenLive(ifName, snapshotLen, promiscuous, timeout)
@@ -56,69 +56,74 @@ func dnsListenAndServe(ifName string) {
 }
 
 func captureDNSLoop(handle *pcap.Handle) {
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	for packet := range packetSource.Packets() {
-		// ethLayer := packet.Layer(layers.LayerTypeEthernet)
-		ipLayer := packet.Layer(layers.LayerTypeIPv4)
-		// tcpLayer := packet.Layer(layers.LayerTypeTCP)
-		dnsLayer := packet.Layer(layers.LayerTypeDNS)
+	var eth layers.Ethernet
+	var ip4 layers.IPv4
+	var udp layers.UDP
+	var dns layers.DNS
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &dns)
+	decoded := []gopacket.LayerType{}
+	for {
+		packetPayload, _, err := handle.ReadPacketData()
+		if err != nil {
+			log.Error("Error reading packet data", err)
+			return
+		}
 
-		if dnsLayer != nil {
-			// eth, _ := ethLayer.(*layers.Ethernet)
-			ip, _ := ipLayer.(*layers.IPv4)
-			// tcp, _ := tcpLayer.(*layers.TCP)
-			dns, _ := dnsLayer.(*layers.DNS)
+		parser.DecodeLayers(packetPayload, &decoded)
+		if len(decoded) != 4 {
+			log.Error("Error decoding packet data", decoded, err)
+			continue
+		}
 
-			DNSOpsCode := int(dns.OpCode)
-			DNSResponseCode := int(dns.ResponseCode)
-			dnsANCount := int(dns.ANCount)
+		DNSOpsCode := int(dns.OpCode)
+		DNSResponseCode := int(dns.ResponseCode)
+		dnsANCount := int(dns.ANCount)
 
-			if (dnsANCount == 0 && DNSResponseCode > 0) || (dnsANCount > 0) {
+		if (dnsANCount == 0 && DNSResponseCode > 0) || (dnsANCount > 0) {
 
-				for _, dnsQuestion := range dns.Questions {
+			for _, dnsQuestion := range dns.Questions {
 
-					t := time.Now()
-					timestamp := t.Format(time.RFC3339)
+				t := time.Now()
+				timestamp := t.Format(time.RFC3339)
 
-					d := dnsLookupByQuestionName(string(dnsQuestion.Name))
-					if d != nil {
-						continue
-					}
+				d := dnsLookupByQuestionName(string(dnsQuestion.Name))
+				if d != nil {
+					continue
+				}
 
-					// Add a new entry
-					d = &DNSStats{Timestamp: timestamp, SourceIP: ip.SrcIP.String(),
-						DestinationIP:   ip.DstIP.String(),
-						DNSQuery:        string(dnsQuestion.Name),
-						DNSOpsCode:      strconv.Itoa(DNSOpsCode),
-						DNSResponseCode: strconv.Itoa(DNSResponseCode),
-						NumberOfAnswers: strconv.Itoa(dnsANCount)}
+				// Add a new entry
+				d = &DNSStats{Timestamp: timestamp, SourceIP: ip4.SrcIP.String(),
+					DestinationIP:   ip4.DstIP.String(),
+					DNSQuery:        string(dnsQuestion.Name),
+					DNSOpsCode:      strconv.Itoa(DNSOpsCode),
+					DNSResponseCode: strconv.Itoa(DNSResponseCode),
+					NumberOfAnswers: strconv.Itoa(dnsANCount)}
 
-					log.WithFields(log.Fields{"opcode": d.DNSOpsCode, "response": d.DNSResponseCode,
-						"#answers": d.NumberOfAnswers, "question": d.DNSQuery}).
-						Debug("DNS Response record")
+				log.WithFields(log.Fields{"opcode": d.DNSOpsCode, "response": d.DNSResponseCode,
+					"#answers": d.NumberOfAnswers, "question": d.DNSQuery}).
+					Debug("DNS Response record")
 
-					// fmt.Println("    DNS OpCode: ", d.DNSOpsCode)
-					// fmt.Println("    DNS ResponseCode: ", d.DNSResponseCode)
-					// fmt.Println("    DNS # Answers: ", d.NumberOfAnswers)
-					// fmt.Println("    DNS Question: ", d.DNSQuery)
-					// fmt.Println("    DNS Endpoints: ", d.SourceIP, d.DestinationIP)
+				// fmt.Println("    DNS OpCode: ", d.DNSOpsCode)
+				// fmt.Println("    DNS ResponseCode: ", d.DNSResponseCode)
+				// fmt.Println("    DNS # Answers: ", d.NumberOfAnswers)
+				// fmt.Println("    DNS Question: ", d.DNSQuery)
+				// fmt.Println("    DNS Endpoints: ", d.SourceIP, d.DestinationIP)
 
-					if dnsANCount > 0 {
+				if dnsANCount > 0 {
 
-						for _, dnsAnswer := range dns.Answers {
-							d.DNSAnswerTTL = append(d.DNSAnswerTTL, fmt.Sprint(dnsAnswer.TTL))
-							if dnsAnswer.IP != nil {
-								log.WithFields(log.Fields{"DNSAnswer": dnsAnswer.IP.String(), "question": d.DNSQuery}).Debug("DNS new entry")
-								d.DNSAnswer = append(d.DNSAnswer, dnsAnswer.IP)
-							}
+					for _, dnsAnswer := range dns.Answers {
+						d.DNSAnswerTTL = append(d.DNSAnswerTTL, fmt.Sprint(dnsAnswer.TTL))
+						if dnsAnswer.IP != nil {
+							log.WithFields(log.Fields{"DNSAnswer": dnsAnswer.IP.String(), "question": d.DNSQuery}).Debug("DNS new entry")
+							d.DNSAnswer = append(d.DNSAnswer, dnsAnswer.IP)
 						}
-
 					}
-
-					// Append to main dns cache
-					dnsTable = append(dnsTable, *d)
 
 				}
+
+				// Append to main dns cache
+				dnsTable = append(dnsTable, *d)
+
 			}
 		}
 	}

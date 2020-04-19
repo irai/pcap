@@ -111,7 +111,7 @@ func PrintTable() {
 func ListenAndServe(nic string, localNetwork *net.IPNet, hostMAC net.HardwareAddr) error {
 	const snapshotLen int32 = 1024
 	const promiscuous bool = true
-	const timeout time.Duration = 10 * time.Second
+	const timeout time.Duration = 0
 	// handle  *pcap.Handle
 
 	handle, err := pcap.OpenLive(nic, snapshotLen, promiscuous, timeout)
@@ -130,11 +130,70 @@ func ListenAndServe(nic string, localNetwork *net.IPNet, hostMAC net.HardwareAdd
 		log.Error("cannot bpfilter", err)
 		return err
 	}
-	go captureTCPLoop(handle, localNetwork, hostMAC)
+	go captureTCPLoopNew(handle, localNetwork, hostMAC)
 
 	dnsListenAndServe(nic)
 
 	return nil
+}
+
+// captureTcpLoopNew avoid packet allocations saving garbage collection time
+func captureTCPLoopNew(handle *pcap.Handle, localNetwork *net.IPNet, hostMAC net.HardwareAddr) {
+
+	var eth layers.Ethernet
+	var ip4 layers.IPv4
+	var tcp layers.TCP
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &tcp)
+	decoded := []gopacket.LayerType{}
+	for {
+		packetPayload, _, err := handle.ReadPacketData()
+		if err != nil {
+			log.Error("Error reading packet data", err)
+			return
+		}
+
+		parser.DecodeLayers(packetPayload, &decoded)
+		if len(decoded) != 3 {
+			log.Error("Error decoding packet data", decoded, err)
+			continue
+		}
+
+		now := time.Now()
+
+		// Don't capture netfilter traffic
+		// if ip.SrcIP.Equal(config.HostIP) || ip.DstIP.Equal(config.HostIP) {
+		// return
+		// }
+
+		tcpLen := uint(ip4.Length - uint16(ip4.IHL*4))
+
+		// Skip forwarding sent by us
+		if bytes.Compare(eth.SrcMAC, hostMAC) == 0 {
+			continue
+		}
+
+		// add to table if this is a local host sending data
+		if localNetwork.Contains(ip4.SrcIP) {
+			host := findOrAddHostIP(ip4.SrcIP, eth.SrcMAC)
+			host.LastPacketTime = now
+			entry := host.findOrAddIP(ip4.DstIP)
+			entry.LastPacketTime = now
+			entry.OutPacketBytes = entry.OutPacketBytes + tcpLen
+			entry.OutPacketCount = entry.OutPacketCount + 1
+			if tcp.SYN {
+				entry.OutConnCount = entry.OutConnCount + 1
+			}
+		}
+
+		// Record in destination host; if it exist
+		if localNetwork.Contains(ip4.DstIP) {
+			if host := FindHostByIP(ip4.DstIP); host != nil {
+				entry := host.findOrAddIP(ip4.SrcIP)
+				entry.InPacketBytes = entry.InPacketBytes + tcpLen
+				entry.InPacketCount = entry.InPacketCount + 1
+			}
+		}
+	}
 }
 
 func captureTCPLoop(handle *pcap.Handle, localNetwork *net.IPNet, hostMAC net.HardwareAddr) {
@@ -166,9 +225,9 @@ func captureTCPLoop(handle *pcap.Handle, localNetwork *net.IPNet, hostMAC net.Ha
 			tcpLen := uint(ip.Length - uint16(ip.IHL*4))
 
 			// Skip forwarding sent by us
-			if bytes.Compare(eth.SrcMAC, hostMAC) == 0 {
-				continue
-			}
+			// if bytes.Compare(eth.SrcMAC, hostMAC) == 0 {
+			// continue
+			// }
 
 			// add to table if this is a local host sending data
 			if localNetwork.Contains(ip.SrcIP) {

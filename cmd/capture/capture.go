@@ -12,7 +12,21 @@ import (
 
 	"github.com/irai/pcap"
 	log "github.com/sirupsen/logrus"
+
+	"net/http"
+	_ "net/http/pprof"
 )
+
+/***
+using pprof:
+
+go tool pprof -alloc_objects http://localhost:6060/debug/pprof/heap
+
+inuse_space — amount of memory allocated and not released yet
+inuse_objects— amount of objects allocated and not released yet
+alloc_space — total amount of memory allocated (regardless of released)
+alloc_objects — total amount of objects allocated (regardless of released
+**/
 
 var (
 	nic = flag.String("i", "eth0", "network interface to listen to")
@@ -32,7 +46,11 @@ func main() {
 
 	go pcap.ListenAndServe(*nic, localNetwork, hostMAC)
 
-	go pcap.ICMPListenAndServe(*nic)
+	// go pcap.ICMPListenAndServe(*nic)
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	cmd()
 
