@@ -108,7 +108,7 @@ func PrintTable() {
 }
 
 // ListenAndServe main listening loop
-func ListenAndServe(nic string, localNetwork *net.IPNet, hostMAC net.HardwareAddr) error {
+func ListenAndServe(nic string, localNetwork net.IPNet, hostMAC net.HardwareAddr) error {
 	const snapshotLen int32 = 1024
 	const promiscuous bool = true
 	const timeout time.Duration = 0
@@ -138,7 +138,7 @@ func ListenAndServe(nic string, localNetwork *net.IPNet, hostMAC net.HardwareAdd
 }
 
 // captureTcpLoopNew avoid packet allocations saving garbage collection time
-func captureTCPLoopNew(handle *pcap.Handle, localNetwork *net.IPNet, hostMAC net.HardwareAddr) {
+func captureTCPLoopNew(handle *pcap.Handle, localNetwork net.IPNet, hostMAC net.HardwareAddr) {
 
 	var eth layers.Ethernet
 	var ip4 layers.IPv4
