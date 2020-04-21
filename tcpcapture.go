@@ -146,7 +146,7 @@ func captureTCPLoopNew(handle *pcap.Handle, localNetwork net.IPNet, hostMAC net.
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &tcp)
 	decoded := []gopacket.LayerType{}
 	for {
-		packetPayload, _, err := handle.ReadPacketData()
+		packetPayload, _, err := handle.ZeroCopyReadPacketData()
 		if err != nil {
 			log.Error("Error reading packet data", err)
 			return

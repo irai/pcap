@@ -63,7 +63,7 @@ func captureDNSLoop(handle *pcap.Handle) {
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &dns)
 	decoded := []gopacket.LayerType{}
 	for {
-		packetPayload, _, err := handle.ReadPacketData()
+		packetPayload, _, err := handle.ZeroCopyReadPacketData()
 		if err != nil {
 			log.Error("Error reading packet data", err)
 			return
