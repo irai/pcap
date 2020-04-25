@@ -131,7 +131,7 @@ func ListenAndServe(nic string, localNetwork net.IPNet, hostMAC net.HardwareAddr
 		log.Error("cannot bpfilter", err)
 		return err
 	}
-	go captureTCPLoopNew(handle, localNetwork, hostMAC)
+	go captureTCPLoop(handle, localNetwork, hostMAC)
 
 	dnsListenAndServe(nic)
 
