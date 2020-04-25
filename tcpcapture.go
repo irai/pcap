@@ -72,10 +72,11 @@ func findOrAddHostIP(ip net.IP, mac net.HardwareAddr) (entry *HostStats) {
 	defer mutex.Unlock()
 	mutex.Lock()
 
-	entry, ok := hostStatsTable[ip.String()]
+	ipString := ip.String() // reuse same ip string
+	entry, ok := hostStatsTable[ipString]
 	if !ok {
 		entry = &HostStats{MAC: dupMAC(mac), IP: dupIP(ip), LastPacketTime: time.Now(), Traffic: []*TCPStats{}}
-		hostStatsTable[ip.String()] = entry
+		hostStatsTable[ipString] = entry
 	}
 	return entry
 }
@@ -138,7 +139,7 @@ func ListenAndServe(nic string, localNetwork net.IPNet, hostMAC net.HardwareAddr
 }
 
 // captureTcpLoopNew avoid packet allocations saving garbage collection time
-func captureTCPLoopNew(handle *pcap.Handle, localNetwork net.IPNet, hostMAC net.HardwareAddr) {
+func captureTCPLoop(handle *pcap.Handle, localNetwork net.IPNet, hostMAC net.HardwareAddr) {
 
 	var eth layers.Ethernet
 	var ip4 layers.IPv4
@@ -191,64 +192,6 @@ func captureTCPLoopNew(handle *pcap.Handle, localNetwork net.IPNet, hostMAC net.
 				entry := host.findOrAddIP(ip4.SrcIP)
 				entry.InPacketBytes = entry.InPacketBytes + tcpLen
 				entry.InPacketCount = entry.InPacketCount + 1
-			}
-		}
-	}
-}
-
-func captureTCPLoop(handle *pcap.Handle, localNetwork *net.IPNet, hostMAC net.HardwareAddr) {
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	for packet := range packetSource.Packets() {
-		// PrintPacketInfo(packet)
-		ethLayer := packet.Layer(layers.LayerTypeEthernet)
-		ipLayer := packet.Layer(layers.LayerTypeIPv4)
-		tcpLayer := packet.Layer(layers.LayerTypeTCP)
-
-		if ethLayer == nil || ipLayer == nil || tcpLayer == nil {
-			log.Error("Invalid packet ", ethLayer, ipLayer, tcpLayer)
-			return
-		}
-
-		if tcpLayer != nil {
-
-			eth, _ := ethLayer.(*layers.Ethernet)
-			ip, _ := ipLayer.(*layers.IPv4)
-			tcp, _ := tcpLayer.(*layers.TCP)
-
-			now := time.Now()
-
-			// Don't capture netfilter traffic
-			// if ip.SrcIP.Equal(config.HostIP) || ip.DstIP.Equal(config.HostIP) {
-			// return
-			// }
-
-			tcpLen := uint(ip.Length - uint16(ip.IHL*4))
-
-			// Skip forwarding sent by us
-			// if bytes.Compare(eth.SrcMAC, hostMAC) == 0 {
-			// continue
-			// }
-
-			// add to table if this is a local host sending data
-			if localNetwork.Contains(ip.SrcIP) {
-				host := findOrAddHostIP(ip.SrcIP, eth.SrcMAC)
-				host.LastPacketTime = now
-				entry := host.findOrAddIP(ip.DstIP)
-				entry.LastPacketTime = now
-				entry.OutPacketBytes = entry.OutPacketBytes + tcpLen
-				entry.OutPacketCount = entry.OutPacketCount + 1
-				if tcp.SYN {
-					entry.OutConnCount = entry.OutConnCount + 1
-				}
-			}
-
-			// Record in destination host; if it exist
-			if localNetwork.Contains(ip.DstIP) {
-				if host := FindHostByIP(ip.DstIP); host != nil {
-					entry := host.findOrAddIP(ip.SrcIP)
-					entry.InPacketBytes = entry.InPacketBytes + tcpLen
-					entry.InPacketCount = entry.InPacketCount + 1
-				}
 			}
 		}
 	}
