@@ -65,13 +65,13 @@ func captureDNSLoop(handle *pcap.Handle) {
 	for {
 		packetPayload, _, err := handle.ZeroCopyReadPacketData()
 		if err != nil {
-			log.Error("Error reading packet data", err)
+			log.Error("pcap error reading packet data", err)
 			return
 		}
 
-		parser.DecodeLayers(packetPayload, &decoded)
-		if len(decoded) != 4 {
-			log.Error("Error decoding packet data", decoded, err)
+		err = parser.DecodeLayers(packetPayload, &decoded)
+		if err != nil || len(decoded) != 4 {
+			log.Error("pcap decoding packet data", decoded, err, len(decoded))
 			continue
 		}
 
