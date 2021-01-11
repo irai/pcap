@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -44,15 +45,24 @@ func main() {
 
 	fmt.Println("host config: ", localNetwork, hostMAC)
 
-	go pcap.ListenAndServe(*nic, *localNetwork, hostMAC)
+	listener, err := pcap.NewTCPHandler(*nic, *localNetwork, hostMAC)
+	if err != nil {
+		log.Fatal("error cannot create listener: %s", err)
+	}
+
+	ctxt, cancel := context.WithCancel(nil)
+	go listener.ListenAndServe(ctxt)
 
 	// go pcap.ICMPListenAndServe(*nic)
 
+	// http listener for pprof
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
 	cmd()
+
+	cancel()
 
 }
 
@@ -84,7 +94,7 @@ func cmd() {
 		case 'l':
 			// l := log.GetLevel()
 			// setLogLevel("info") // quick hack to print hostStatsTable
-			pcap.PrintTable()
+			// pcap.PrintTable()
 			// log.SetLevel(l)
 		}
 	}
