@@ -101,12 +101,12 @@ func PrintTable() {
 		return
 	}
 
-	log.Printf("Traffic table len %d", len(trafficTable))
+	fmt.Printf("Traffic table len %d", len(trafficTable))
 
 	for _, host := range trafficTable {
 		for minute, i := range host.Traffic {
 			for _, t := range i {
-				log.Printf("time=%s host=%16s peer=%16s outCount=%6d outBytes=%10d inCount=%6d inBytes=%10d", minute.Format("2006-01-02 15:04:05"), host.MAC, t.IP,
+				fmt.Printf("time=%s host=%16s peer=%16s connCount=%6d inCount=%v inBytes=%10d outCount=%6d outBytes=%10d", minute.Format("2006-01-02 15:04:05"), host.MAC, t.IP,
 					t.OutConnCount, t.InPacketCount, t.InPacketBytes, t.OutPacketCount, t.OutPacketBytes)
 			}
 		}
