@@ -149,13 +149,13 @@ func captureTCPLoop(handle *pcap.Handle, localNetwork net.IPNet, hostMAC net.Har
 	for {
 		packetPayload, _, err := handle.ZeroCopyReadPacketData()
 		if err != nil {
-			log.Error("Error reading packet data", err)
+			log.Error("pcap error reading packet data", err)
 			return
 		}
 
-		parser.DecodeLayers(packetPayload, &decoded)
-		if len(decoded) != 3 {
-			log.Error("Error decoding packet data", decoded, err)
+		err = parser.DecodeLayers(packetPayload, &decoded)
+		if err != nil || len(decoded) != 3 {
+			log.Error("pcap error decoding tcp packet ", decoded, err, len(decoded))
 			continue
 		}
 
