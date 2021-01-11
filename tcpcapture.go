@@ -96,7 +96,7 @@ func (h *TCPHandler) FindHost(mac net.HardwareAddr) *Host {
 }
 
 // PrintTable print the hostStatsTable to standard out
-func (h *TCPHandler) PrintTable() {
+func PrintTable() {
 	if len(trafficTable) <= 0 {
 		return
 	}
