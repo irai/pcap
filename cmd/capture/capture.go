@@ -50,7 +50,7 @@ func main() {
 		log.Fatal("error cannot create listener: %s", err)
 	}
 
-	ctxt, cancel := context.WithCancel(nil)
+	ctxt, cancel := context.WithCancel(context.Background())
 	go listener.ListenAndServe(ctxt)
 
 	// go pcap.ICMPListenAndServe(*nic)
