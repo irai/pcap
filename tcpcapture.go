@@ -90,8 +90,9 @@ func findOrAddHostIP(mac net.HardwareAddr, ip net.IP) (host *Host) {
 
 // FindHost find a host in the hostStatsTable; return nil if not found
 func (h *TCPHandler) FindHost(mac net.HardwareAddr) *Host {
-	defer mutex.Unlock()
 	mutex.Lock()
+	defer mutex.Unlock()
+
 	return findMAC(mac)
 }
 
@@ -113,14 +114,18 @@ func PrintTable() {
 	}
 }
 
-// HasTrafficSince return true if the host has sent packets since the deadline
-func (h *TCPHandler) HasTrafficSince(mac net.HardwareAddr, deadline time.Time) bool {
-	if host := h.FindHost(mac); host != nil {
+// HasTrafficSince return Host if the host has sent packets since the deadline
+// otherwise it returns nil
+func (h *TCPHandler) HasTrafficSince(mac net.HardwareAddr, deadline time.Time) *Host {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if host := findMAC(mac); host != nil {
 		if host.LastPacketTime.After(deadline) {
-			return true
+			return host
 		}
 	}
-	return false
+	return nil
 }
 
 // TCPHandler store a packet listener handler
@@ -225,7 +230,6 @@ func (h *TCPHandler) ListenAndServe(ctx context.Context) error {
 		}
 
 		mutex.Lock()
-		defer mutex.Unlock()
 
 		// add to table if this is a local host sending data
 		if h.localNet.Contains(ip4.SrcIP) {
@@ -247,5 +251,7 @@ func (h *TCPHandler) ListenAndServe(ctx context.Context) error {
 			host.LastPacketTime = now
 			host.findOrCreatePeer(ip4.SrcIP, now, tcpLen, 0, false)
 		}
+
+		mutex.Unlock()
 	}
 }
