@@ -149,7 +149,6 @@ func NewTCPHandler(nic string, localNetwork net.IPNet, hostMAC net.HardwareAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open nic=%s: %w", nic, err)
 	}
-	defer h.handle.Close()
 
 	log.Info("Started AllTraffic() goroutine")
 	// Set filter
@@ -188,6 +187,11 @@ func NewTCPHandler(nic string, localNetwork net.IPNet, hostMAC net.HardwareAddr)
 
 	h.handle.SetBPFInstructionFilter(bpf)
 	****/
+}
+
+// Close release the underlying handle
+func (h *TCPHandler) Close() {
+	h.handle.Close()
 }
 
 // Notify adds a channel for event notification

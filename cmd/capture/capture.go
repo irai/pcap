@@ -56,6 +56,7 @@ func main() {
 		if err != nil {
 			log.Error("TCP listener ended with error: %s", err)
 		}
+		listener.Close()
 	}()
 
 	// go pcap.ICMPListenAndServe(*nic)
