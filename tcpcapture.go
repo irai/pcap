@@ -107,7 +107,7 @@ func PrintTable() {
 	for _, host := range trafficTable {
 		for minute, i := range host.Traffic {
 			for _, t := range i {
-				fmt.Printf("time=%s host=%16s peer=%16s connCount=%6d inCount=%v inBytes=%10d outCount=%6d outBytes=%10d", minute.Format("2006-01-02 15:04:05"), host.MAC, t.IP,
+				fmt.Printf("time=%s host=%16s peer=%16s connCount=%6d inCount=%v inBytes=%10d outCount=%6d outBytes=%10d\n", minute.Format("2006-01-02 15:04:05"), host.MAC, t.IP,
 					t.OutConnCount, t.InPacketCount, t.InPacketBytes, t.OutPacketCount, t.OutPacketBytes)
 			}
 		}
@@ -153,7 +153,8 @@ func NewTCPHandler(nic string, localNetwork net.IPNet, hostMAC net.HardwareAddr)
 	log.Info("Started AllTraffic() goroutine")
 	// Set filter
 	// var filter string = "tcp and (port 80 or port 443)"
-	filter := "tcp or udp"
+	// filter := "tcp or udp"
+	filter := "ip"
 	if err = h.handle.SetBPFFilter(filter); err != nil {
 		return nil, fmt.Errorf("failed to set bpf filter: %w", err)
 	}
@@ -204,8 +205,9 @@ func (h *TCPHandler) ListenAndServe(ctx context.Context) error {
 
 	var eth layers.Ethernet
 	var ip4 layers.IPv4
-	var tcp layers.TCP
-	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &tcp)
+	// var tcp layers.TCP
+	// var udp layers.UDP
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4)
 	decoded := []gopacket.LayerType{}
 	for {
 		packetPayload, _, err := h.handle.ZeroCopyReadPacketData()
@@ -226,7 +228,7 @@ func (h *TCPHandler) ListenAndServe(ctx context.Context) error {
 		// return
 		// }
 
-		tcpLen := uint16(ip4.Length - uint16(ip4.IHL*4))
+		packetLen := uint16(ip4.Length - uint16(ip4.IHL*4))
 
 		// Skip forwarding sent by us
 		if bytes.Compare(eth.SrcMAC, h.hostMAC) == 0 {
@@ -240,20 +242,20 @@ func (h *TCPHandler) ListenAndServe(ctx context.Context) error {
 			host := findOrAddHostIP(eth.SrcMAC, ip4.SrcIP)
 			host.LastPacketTime = now
 			conn := false
-			if tcp.SYN {
-				conn = true
-			}
-			entry := host.findOrCreatePeer(ip4.DstIP, now, 0, tcpLen, conn)
-			if tcp.SYN {
-				entry.OutConnCount = entry.OutConnCount + 1
-			}
+			// if tcp.SYN {
+			// conn = true
+			// }
+			host.findOrCreatePeer(ip4.DstIP, now, 0, packetLen, conn)
+			// if tcp.SYN {
+			// entry.OutConnCount = entry.OutConnCount + 1
+			// }
 		}
 
 		// Record in destination host; if it exist
 		if h.localNet.Contains(ip4.DstIP) {
 			host := findOrAddHostIP(eth.DstMAC, ip4.DstIP)
 			host.LastPacketTime = now
-			host.findOrCreatePeer(ip4.SrcIP, now, tcpLen, 0, false)
+			host.findOrCreatePeer(ip4.SrcIP, now, packetLen, 0, false)
 		}
 
 		mutex.Unlock()
