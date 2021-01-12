@@ -34,39 +34,44 @@ type Traffic struct {
 	OutConnCount   uint16 `json:"out_conn_count"`
 }
 
+// TimeSlice represents traffic for a particular minute
+type TimeSlice struct {
+	Time    time.Time
+	Traffic map[string]*Traffic
+}
+
 // Host record recent network statistics for each host
 type Host struct {
 	MAC            net.HardwareAddr `json:"mac"`
 	IP             net.IP           `json:"ip"`
 	LastPacketTime time.Time        `json:"last_packet_time"`
-	Traffic        map[time.Time]map[string]*Traffic
+	History        []TimeSlice      `json:"history"`
 }
 
-func (hs *Host) findOrCreatePeer(ip net.IP, t time.Time, inBytes uint16, outBytes uint16, conn bool) (entry *Traffic) {
+func (hs *Host) findOrCreatePeer(ip net.IP, t time.Time, inBytes uint16, outBytes uint16) (entry *Traffic) {
 
 	// Truncate time to minute
 	t = t.Truncate(time.Minute)
 
-	tt := hs.Traffic[t]
-	if tt == nil {
-		tt = map[string]*Traffic{}
-		hs.Traffic[t] = tt
+	// Time is always incrementing, so this is a new time if it is not the same as the last entry in History
+	if len(hs.History) == 0 || hs.History[len(hs.History)-1].Time != t {
+		hs.History = append(hs.History, TimeSlice{Time: t, Traffic: map[string]*Traffic{}})
 	}
+	i := len(hs.History) - 1
 
-	entry = tt[string(ip)]
+	entry = hs.History[i].Traffic[string(ip)]
 	if entry == nil {
-		entry = &Traffic{IP: dupIP(ip), InPacketBytes: uint64(inBytes), OutPacketBytes: uint64(outBytes)}
-		tt[string(entry.IP)] = entry
+		entry = &Traffic{IP: dupIP(ip)}
+		hs.History[i].Traffic[string(entry.IP)] = entry
 	}
 
 	if inBytes > 0 {
-		entry.InPacketBytes++
+		entry.InPacketCount++
+		entry.InPacketBytes = entry.InPacketBytes + uint64(inBytes)
 	}
-	if outBytes > 9 {
+	if outBytes > 0 {
 		entry.OutPacketCount++
-	}
-	if conn {
-		entry.OutConnCount++
+		entry.OutPacketBytes = entry.OutPacketBytes + uint64(outBytes)
 	}
 	return entry
 }
@@ -79,10 +84,9 @@ func findMAC(mac net.HardwareAddr) *Host {
 }
 
 func findOrAddHostIP(mac net.HardwareAddr, ip net.IP) (host *Host) {
-
 	host = findMAC(mac)
 	if host == nil {
-		host = &Host{MAC: dupMAC(mac), IP: dupIP(ip), LastPacketTime: time.Now(), Traffic: map[time.Time]map[string]*Traffic{}}
+		host = &Host{MAC: dupMAC(mac), IP: dupIP(ip), LastPacketTime: time.Now()}
 		trafficTable[string(mac)] = host
 	}
 	return host
@@ -105,10 +109,11 @@ func PrintTable() {
 	fmt.Printf("Traffic table len %d", len(trafficTable))
 
 	for _, host := range trafficTable {
-		for minute, i := range host.Traffic {
-			for _, t := range i {
-				fmt.Printf("time=%s host=%16s peer=%16s connCount=%6d inCount=%v inBytes=%10d outCount=%6d outBytes=%10d\n", minute.Format("2006-01-02 15:04:05"), host.MAC, t.IP,
-					t.OutConnCount, t.InPacketCount, t.InPacketBytes, t.OutPacketCount, t.OutPacketBytes)
+		for i := range host.History {
+			for _, t := range host.History[i].Traffic {
+				fmt.Printf("time=%s host=%16s peer=%16s inCount=%v inBytes=%10d outCount=%6d outBytes=%10d\n",
+					host.History[i].Time.Format("2006-01-02 15:04"), host.MAC, t.IP,
+					t.InPacketCount, t.InPacketBytes, t.OutPacketCount, t.OutPacketBytes)
 			}
 		}
 	}
@@ -241,21 +246,14 @@ func (h *TCPHandler) ListenAndServe(ctx context.Context) error {
 		if h.localNet.Contains(ip4.SrcIP) {
 			host := findOrAddHostIP(eth.SrcMAC, ip4.SrcIP)
 			host.LastPacketTime = now
-			conn := false
-			// if tcp.SYN {
-			// conn = true
-			// }
-			host.findOrCreatePeer(ip4.DstIP, now, 0, packetLen, conn)
-			// if tcp.SYN {
-			// entry.OutConnCount = entry.OutConnCount + 1
-			// }
+			host.findOrCreatePeer(ip4.DstIP, now, 0, packetLen)
 		}
 
 		// Record in destination host; if it exist
 		if h.localNet.Contains(ip4.DstIP) {
 			host := findOrAddHostIP(eth.DstMAC, ip4.DstIP)
 			host.LastPacketTime = now
-			host.findOrCreatePeer(ip4.SrcIP, now, packetLen, 0, false)
+			host.findOrCreatePeer(ip4.SrcIP, now, packetLen, 0)
 		}
 
 		mutex.Unlock()
