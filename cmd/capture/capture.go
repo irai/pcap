@@ -21,7 +21,7 @@ import (
 /***
 using pprof:
 
-go tool pprof -alloc_objects http://localhost:6060/debug/pprof/heap
+go tool pprof -alloc_objects http://localhost:6061/debug/pprof/heap
 
 inuse_space — amount of memory allocated and not released yet
 inuse_objects— amount of objects allocated and not released yet
@@ -57,7 +57,7 @@ func main() {
 
 	// http listener for pprof
 	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
+		log.Println(http.ListenAndServe("localhost:6061", nil))
 	}()
 
 	cmd()
