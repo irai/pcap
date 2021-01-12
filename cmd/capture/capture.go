@@ -51,7 +51,12 @@ func main() {
 	}
 
 	ctxt, cancel := context.WithCancel(context.Background())
-	go listener.ListenAndServe(ctxt)
+	go func() {
+		err := listener.ListenAndServe(ctxt)
+		if err != nil {
+			log.Error("TCP listener ended with error: %s", err)
+		}
+	}()
 
 	// go pcap.ICMPListenAndServe(*nic)
 
