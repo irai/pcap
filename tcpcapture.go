@@ -205,7 +205,7 @@ func (h *TCPHandler) ListenAndServe(ctx context.Context) error {
 		}
 
 		err = parser.DecodeLayers(packetPayload, &decoded)
-		if err != nil || len(decoded) != 3 {
+		if err != nil && len(decoded) != 3 {
 			log.Error("pcap error decoding tcp packet ", decoded, err, len(decoded))
 			continue
 		}
