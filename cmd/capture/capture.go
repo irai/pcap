@@ -47,7 +47,7 @@ func main() {
 
 	listener, err := pcap.NewTCPHandler(*nic, *localNetwork, hostMAC)
 	if err != nil {
-		log.Fatal("error cannot create listener: %s", err)
+		log.Fatal("error cannot create listener: ", err)
 	}
 
 	ctxt, cancel := context.WithCancel(nil)
